@@ -1,111 +1,137 @@
--- LocalScript: Highlight (White), Nametag, Distance, Stamina
+-- LocalScript: Safe Mode (ESP + Stamina tách biệt)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
--- Cấu hình màu sắc
-local BOX_COLOR = Color3.fromRGB(255, 255, 255) -- Màu trắng
-local TEXT_COLOR = Color3.fromRGB(255, 255, 255) -- Màu chữ trắng
+print(">>> SCRIPT ĐANG KHỞI ĐỘNG...") -- Kiểm tra xem script có chạy dòng đầu không
+
+-- Cấu hình
+local CONFIG = {
+    BoxColor = Color3.fromRGB(255, 255, 255), -- Màu trắng
+    TextColor = Color3.fromRGB(255, 255, 255),
+    ShowDistance = true,
+    FontSize = 14
+}
 
 -------------------------------------------------------------------
--- 1. HÀM TẠO VIỀN (HIGHLIGHT)
+-- PHẦN 1: ESP (NHÌN XUYÊN TƯỜNG & NAMETAG)
 -------------------------------------------------------------------
-local function createBoxHighlight(target)
-    if target:FindFirstChild("SelectionBox") then return end
+task.spawn(function() -- Chạy luồng riêng để không bị ảnh hưởng bởi lỗi khác
+    local function createVisuals(target)
+        if target:FindFirstChild("MyESPBox") then return end
 
-    local box = Instance.new("SelectionBox")
-    box.Adornee = target
-    box.Color3 = BOX_COLOR
-    box.LineThickness = 0.05
-    box.SurfaceTransparency = 1 -- Chỉ hiện viền
-    box.AlwaysOnTop = true
-    box.Parent = target
-end
+        -- 1. Tạo Khung Viền (Outline)
+        local box = Instance.new("SelectionBox")
+        box.Name = "MyESPBox"
+        box.Adornee = target
+        box.Color3 = CONFIG.BoxColor
+        box.LineThickness = 0.05
+        box.SurfaceTransparency = 1
+        box.AlwaysOnTop = true
+        box.Parent = target
+    end
 
--------------------------------------------------------------------
--- 2. HÀM TẠO NAMETAG & KHOẢNG CÁCH
--------------------------------------------------------------------
-local function createNametag(character, player)
-    -- Tìm phần đầu để gắn tên vào
-    local head = character:FindFirstChild("Head")
-    if not head or head:FindFirstChild("ESPTag") then return end
+    local function createNametag(character, player)
+        local head = character:FindFirstChild("Head")
+        if not head or head:FindFirstChild("MyESPTag") then return end
 
-    -- Tạo bảng tên (BillboardGui)
-    local bgui = Instance.new("BillboardGui")
-    bgui.Name = "ESPTag"
-    bgui.Adornee = head
-    bgui.Size = UDim2.new(0, 200, 0, 50)
-    bgui.StudsOffset = Vector3.new(0, 3, 0) -- Treo cao hơn đầu 3 đơn vị
-    bgui.AlwaysOnTop = true -- Luôn nhìn thấy xuyên tường
+        -- 2. Tạo Bảng Tên
+        local bgui = Instance.new("BillboardGui")
+        bgui.Name = "MyESPTag"
+        bgui.Adornee = head
+        bgui.Size = UDim2.new(0, 200, 0, 50)
+        bgui.StudsOffset = Vector3.new(0, 3.5, 0)
+        bgui.AlwaysOnTop = true
 
-    local label = Instance.new("TextLabel")
-    label.Parent = bgui
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.TextColor3 = TEXT_COLOR
-    label.TextStrokeTransparency = 0 -- Viền chữ đen cho dễ đọc
-    label.TextSize = 14
-    label.Font = Enum.Font.SourceSansBold
-    
-    bgui.Parent = head
-
-    -- Vòng lặp cập nhật khoảng cách liên tục
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        -- Kiểm tra nếu nhân vật hoặc bảng tên không còn tồn tại thì dừng cập nhật
-        if not character or not character.Parent or not bgui.Parent then
-            connection:Disconnect()
-            return
-        end
-
-        -- Tính khoảng cách
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
-            local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-            local targetPos = character.HumanoidRootPart.Position
-            local distance = (myPos - targetPos).Magnitude
-            
-            -- Cập nhật nội dung: Tên [Khoảng cách]
-            label.Text = player.Name .. "\n[" .. math.floor(distance) .. "m]"
-        end
-    end)
-end
-
--------------------------------------------------------------------
--- 3. HÀM XỬ LÝ CHÍNH
--------------------------------------------------------------------
-local function processPlayer(player)
-    if player == LocalPlayer then return end
-
-    local function onCharacterAdded(character)
-        wait(1) -- Đợi nhân vật load xong
+        local label = Instance.new("TextLabel")
+        label.Parent = bgui
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.TextColor3 = CONFIG.TextColor
+        label.TextStrokeTransparency = 0
+        label.TextSize = CONFIG.FontSize
+        label.Font = Enum.Font.SourceSansBold
+        label.Text = player.Name
         
-        -- Tạo viền cho từng bộ phận
-        for _, part in pairs(character:GetChildren()) do
-            if part:IsA("BasePart") then
-                createBoxHighlight(part)
+        bgui.Parent = head
+
+        -- Cập nhật khoảng cách liên tục
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if not character or not character.Parent or not bgui.Parent then
+                connection:Disconnect()
+                return
             end
-        end
-        
-        -- Tạo Nametag trên đầu
-        createNametag(character, player)
 
-        -- Nếu nhân vật mọc thêm bộ phận mới (ví dụ cầm súng), thêm viền luôn
-        character.ChildAdded:Connect(function(child)
-            if child:IsA("BasePart") then
-                createBoxHighlight(child)
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
+                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+                label.Text = string.format("%s\n[%dm]", player.Name, math.floor(dist))
             end
         end)
     end
 
-    if player.Character then
-        onCharacterAdded(player.Character)
-    end
-    player.CharacterAdded:Connect(onCharacterAdded)
-end
+    local function setupPlayer(player)
+        if player == LocalPlayer then return end
 
--- Chạy cho tất cả người chơi hiện tại
-for _, player in pairs(Players:GetPlayers()) do
-    processPlayer(player)
+        local function charAdded(char)
+            wait(1) -- Đợi load model
+            
+            -- Tạo viền cho các bộ phận
+            for _, part in pairs(char:GetChildren()) do
+                if part:IsA("BasePart") then createVisuals(part) end
+            end
+            
+            -- Tạo tên
+            createNametag(char, player)
+
+            -- Xử lý khi có bộ phận mới (ví dụ cầm súng)
+            char.ChildAdded:Connect(function(child)
+                if child:IsA("BasePart") then createVisuals(child) end
+            end)
+        end
+
+        if player.Character then charAdded(player.Character) end
+        player.CharacterAdded:Connect(charAdded)
+    end
+
+    -- Kích hoạt cho toàn bộ server
+    for _, p in pairs(Players:GetPlayers()) do setupPlayer(p) end
+    Players.PlayerAdded:Connect(setupPlayer)
+    
+    print(">>> ESP (NHÌN XUYÊN TƯỜNG) ĐÃ BẬT THÀNH CÔNG!")
+end)
+
+-------------------------------------------------------------------
+-- PHẦN 2: HACK THỂ LỰC (Được bọc trong pcall để không làm hỏng script)
+-------------------------------------------------------------------
+task.spawn(function()
+    -- pcall giúp script không bị dừng nếu game không có stamina
+    local success, err = pcall(function()
+        -- Đường dẫn này RẤT DỄ LỖI nếu không đúng game
+        local path = ReplicatedStorage:WaitForChild("Systems", 2):WaitForChild("Character", 2):WaitForChild("Game", 2):WaitForChild("Sprinting", 2)
+        
+        if path then
+            local stamina = require(path)
+            if stamina then
+                stamina.MaxStamina = 100 
+                stamina.MinStamina = -20 
+                stamina.StaminaGain = 100
+                stamina.StaminaLoss = 0 -- Chỉnh về 0 để không mất thể lực
+                stamina.SprintSpeed = 35 
+                stamina.StaminaLossDisabled = true
+                print(">>> HACK THỂ LỰC: THÀNH CÔNG!")
+            end
+        else
+            warn(">>> HACK THỂ LỰC: Không tìm thấy file game. Có thể game này không hỗ trợ.")
+        end
+    end)
+
+    if not success then
+        warn(">>> HACK THỂ LỰC THẤT BẠI (Lỗi đường dẫn game):", err)
+        print(">>> Đừng lo, ESP vẫn hoạt động bình thường.")
+    end
+end)
 end
 
 -- Chạy cho người chơi mới vào sau
