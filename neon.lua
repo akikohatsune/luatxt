@@ -1,111 +1,114 @@
--- LocalScript: Safe Mode (ESP + Stamina tách biệt)
+-- Script đã được sửa chữa và gộp tính năng
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-
-print(">>> SCRIPT ĐANG KHỞI ĐỘNG...") -- Kiểm tra xem script có chạy dòng đầu không
 
 -- Cấu hình
 local CONFIG = {
-    BoxColor = Color3.fromRGB(255, 255, 255), -- Màu trắng
-    TextColor = Color3.fromRGB(255, 255, 255),
-    ShowDistance = true,
-    FontSize = 14
+    BoxColor = Color3.fromRGB(255, 255, 255), -- Màu trắng (White)
+    TextColor = Color3.fromRGB(255, 255, 255), -- Chữ màu trắng
+    TextSize = 14
 }
 
 -------------------------------------------------------------------
--- PHẦN 1: ESP (NHÌN XUYÊN TƯỜNG & NAMETAG)
+-- PHẦN 1: ESP (BOX VIỀN + TÊN + KHOẢNG CÁCH)
 -------------------------------------------------------------------
-task.spawn(function() -- Chạy luồng riêng để không bị ảnh hưởng bởi lỗi khác
-    local function createVisuals(target)
-        if target:FindFirstChild("MyESPBox") then return end
+local function createESP(player)
+    if player == LocalPlayer then return end
 
-        -- 1. Tạo Khung Viền (Outline)
-        local box = Instance.new("SelectionBox")
-        box.Name = "MyESPBox"
-        box.Adornee = target
-        box.Color3 = CONFIG.BoxColor
-        box.LineThickness = 0.05
-        box.SurfaceTransparency = 1
-        box.AlwaysOnTop = true
-        box.Parent = target
-    end
+    local function applyVisuals(character)
+        -- Đợi 1 chút để nhân vật load hết
+        if not character:FindFirstChild("Head") then character:WaitForChild("Head", 5) end
+        if not character:FindFirstChild("HumanoidRootPart") then character:WaitForChild("HumanoidRootPart", 5) end
 
-    local function createNametag(character, player)
-        local head = character:FindFirstChild("Head")
-        if not head or head:FindFirstChild("MyESPTag") then return end
-
-        -- 2. Tạo Bảng Tên
-        local bgui = Instance.new("BillboardGui")
-        bgui.Name = "MyESPTag"
-        bgui.Adornee = head
-        bgui.Size = UDim2.new(0, 200, 0, 50)
-        bgui.StudsOffset = Vector3.new(0, 3.5, 0)
-        bgui.AlwaysOnTop = true
-
-        local label = Instance.new("TextLabel")
-        label.Parent = bgui
-        label.BackgroundTransparency = 1
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.TextColor3 = CONFIG.TextColor
-        label.TextStrokeTransparency = 0
-        label.TextSize = CONFIG.FontSize
-        label.Font = Enum.Font.SourceSansBold
-        label.Text = player.Name
-        
-        bgui.Parent = head
-
-        -- Cập nhật khoảng cách liên tục
-        local connection
-        connection = RunService.RenderStepped:Connect(function()
-            if not character or not character.Parent or not bgui.Parent then
-                connection:Disconnect()
-                return
-            end
-
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
-                local dist = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
-                label.Text = string.format("%s\n[%dm]", player.Name, math.floor(dist))
-            end
-        end)
-    end
-
-    local function setupPlayer(player)
-        if player == LocalPlayer then return end
-
-        local function charAdded(char)
-            wait(1) -- Đợi load model
-            
-            -- Tạo viền cho các bộ phận
-            for _, part in pairs(char:GetChildren()) do
-                if part:IsA("BasePart") then createVisuals(part) end
-            end
-            
-            -- Tạo tên
-            createNametag(char, player)
-
-            -- Xử lý khi có bộ phận mới (ví dụ cầm súng)
-            char.ChildAdded:Connect(function(child)
-                if child:IsA("BasePart") then createVisuals(child) end
-            end)
+        -- 1. Tạo Khung Viền Trắng (Thay thế BoxHandleAdornment cũ)
+        if not character:FindFirstChild("ESP_Box") then
+            local box = Instance.new("SelectionBox")
+            box.Name = "ESP_Box"
+            box.Adornee = character
+            box.Color3 = CONFIG.BoxColor
+            box.LineThickness = 0.04
+            box.SurfaceTransparency = 1 -- Chỉ hiện viền, không hiện mặt
+            box.AlwaysOnTop = true
+            box.Parent = character
         end
 
-        if player.Character then charAdded(player.Character) end
-        player.CharacterAdded:Connect(charAdded)
+        -- 2. Tạo Nametag + Khoảng cách (Tham khảo logic từ file esp.lua)
+        local head = character:FindFirstChild("Head")
+        if head and not head:FindFirstChild("ESP_Tag") then
+            local bgui = Instance.new("BillboardGui")
+            bgui.Name = "ESP_Tag"
+            bgui.Adornee = head
+            bgui.Size = UDim2.new(0, 200, 0, 50)
+            bgui.StudsOffset = Vector3.new(0, 3, 0) -- Treo cao trên đầu
+            bgui.AlwaysOnTop = true
+
+            local label = Instance.new("TextLabel")
+            label.Parent = bgui
+            label.BackgroundTransparency = 1
+            label.Size = UDim2.new(1, 0, 1, 0)
+            label.TextColor3 = CONFIG.TextColor
+            label.TextStrokeTransparency = 0 -- Viền chữ đen cho dễ đọc
+            label.TextSize = CONFIG.TextSize
+            label.Font = Enum.Font.SourceSansBold
+            
+            bgui.Parent = head
+
+            -- Cập nhật khoảng cách liên tục
+            RunService.RenderStepped:Connect(function()
+                if not character or not character.Parent or not bgui.Parent then return end
+                
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+                    -- Hiển thị: Tên [Số mét]
+                    label.Text = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
+                else
+                    label.Text = player.DisplayName
+                end
+            end)
+        end
     end
 
-    -- Kích hoạt cho toàn bộ server
-    for _, p in pairs(Players:GetPlayers()) do setupPlayer(p) end
-    Players.PlayerAdded:Connect(setupPlayer)
-    
-    print(">>> ESP (NHÌN XUYÊN TƯỜNG) ĐÃ BẬT THÀNH CÔNG!")
-end)
+    if player.Character then
+        applyVisuals(player.Character)
+    end
+
+    player.CharacterAdded:Connect(function(char)
+        applyVisuals(char)
+    end)
+end
+
+-- Chạy cho tất cả người chơi
+for _, p in pairs(Players:GetPlayers()) do
+    createESP(p)
+end
+Players.PlayerAdded:Connect(createESP)
 
 -------------------------------------------------------------------
--- PHẦN 2: HACK THỂ LỰC (Được bọc trong pcall để không làm hỏng script)
+-- PHẦN 2: HACK THỂ LỰC (STAMINA) - ĐÃ SỬA LỖI
 -------------------------------------------------------------------
+-- Phần này hay gây lỗi nếu game không có đúng đường dẫn, tôi đã thêm pcall để nó không làm hỏng script ESP
 task.spawn(function()
+    pcall(function()
+        -- Code gốc của bạn 
+        local Sprinting = game:GetService("ReplicatedStorage"):WaitForChild("Systems", 2):WaitForChild("Character", 2):WaitForChild("Game", 2):WaitForChild("Sprinting", 2)
+        
+        if Sprinting then
+            local stamina = require(Sprinting)
+            stamina.MaxStamina = 100 
+            stamina.MinStamina = -20 
+            stamina.StaminaGain = 100
+            stamina.StaminaLoss = 0 -- Chỉnh về 0 để chạy không mất sức
+            stamina.SprintSpeed = 35 
+            stamina.StaminaLossDisabled = true
+            print(">>> Hack Thể Lực: Thành công!")
+        else
+            warn(">>> Hack Thể Lực: Không tìm thấy file game, bỏ qua.")
+        end
+    end)
+end)
+
+print(">>> Script đã chạy xong!")
     -- pcall giúp script không bị dừng nếu game không có stamina
     local success, err = pcall(function()
         -- Đường dẫn này RẤT DỄ LỖI nếu không đúng game
