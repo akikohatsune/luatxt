@@ -1,111 +1,126 @@
--- Script đã được sửa chữa và gộp tính năng
+-- Script ESP Optimized cho Delta (Mobile/PC)
+-- Tính năng: Viền Trắng + Tên + Khoảng Cách + Hack Stamina
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 -- Cấu hình
-local CONFIG = {
-    BoxColor = Color3.fromRGB(255, 255, 255), -- Màu trắng (White)
-    TextColor = Color3.fromRGB(255, 255, 255), -- Chữ màu trắng
-    TextSize = 14
+local SETTINGS = {
+    BoxColor = Color3.fromRGB(255, 255, 255), -- Màu trắng
+    TextColor = Color3.fromRGB(255, 255, 255),
+    TextSize = 14,
+    ShowDistance = true
 }
 
 -------------------------------------------------------------------
--- PHẦN 1: ESP (BOX VIỀN + TÊN + KHOẢNG CÁCH)
+-- PHẦN 1: ESP AN TOÀN CHO DELTA
 -------------------------------------------------------------------
 local function createESP(player)
     if player == LocalPlayer then return end
 
     local function applyVisuals(character)
-        -- Đợi 1 chút để nhân vật load hết
-        if not character:FindFirstChild("Head") then character:WaitForChild("Head", 5) end
-        if not character:FindFirstChild("HumanoidRootPart") then character:WaitForChild("HumanoidRootPart", 5) end
+        if not character then return end
+        
+        -- Đợi nạp nhân vật
+        task.wait(0.5)
+        local head = character:FindFirstChild("Head")
+        local root = character:FindFirstChild("HumanoidRootPart")
+        
+        if not head or not root then return end
 
-        -- 1. Tạo Khung Viền Trắng (Thay thế BoxHandleAdornment cũ)
-        if not character:FindFirstChild("ESP_Box") then
-            local box = Instance.new("SelectionBox")
-            box.Name = "ESP_Box"
-            box.Adornee = character
-            box.Color3 = CONFIG.BoxColor
-            box.LineThickness = 0.04
-            box.SurfaceTransparency = 1 -- Chỉ hiện viền, không hiện mặt
-            box.AlwaysOnTop = true
-            box.Parent = character
+        -- 1. TẠO VIỀN (Dùng Highlight thay vì SelectionBox để mượt hơn trên Mobile)
+        -- Nếu muốn dùng SelectionBox như cũ thì báo mình, nhưng Highlight đẹp hơn
+        if not character:FindFirstChild("DeltaESP_Highlight") then
+            local hl = Instance.new("Highlight")
+            hl.Name = "DeltaESP_Highlight"
+            hl.Adornee = character
+            hl.FillTransparency = 1 -- Trong suốt bên trong
+            hl.OutlineColor = SETTINGS.BoxColor
+            hl.OutlineTransparency = 0 -- Hiện viền rõ
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Nhìn xuyên tường
+            hl.Parent = character
         end
 
-        -- 2. Tạo Nametag + Khoảng cách (Tham khảo logic từ file esp.lua)
-        local head = character:FindFirstChild("Head")
-        if head and not head:FindFirstChild("ESP_Tag") then
+        -- 2. TẠO TÊN + KHOẢNG CÁCH (BillboardGui)
+        if not head:FindFirstChild("DeltaESP_Tag") then
             local bgui = Instance.new("BillboardGui")
-            bgui.Name = "ESP_Tag"
+            bgui.Name = "DeltaESP_Tag"
             bgui.Adornee = head
             bgui.Size = UDim2.new(0, 200, 0, 50)
-            bgui.StudsOffset = Vector3.new(0, 3, 0) -- Treo cao trên đầu
+            bgui.StudsOffset = Vector3.new(0, 3.5, 0) -- Cao hơn đầu chút
             bgui.AlwaysOnTop = true
 
             local label = Instance.new("TextLabel")
             label.Parent = bgui
             label.BackgroundTransparency = 1
             label.Size = UDim2.new(1, 0, 1, 0)
-            label.TextColor3 = CONFIG.TextColor
-            label.TextStrokeTransparency = 0 -- Viền chữ đen cho dễ đọc
-            label.TextSize = CONFIG.TextSize
-            label.Font = Enum.Font.SourceSansBold
+            label.TextColor3 = SETTINGS.TextColor
+            label.TextStrokeTransparency = 0 -- Viền chữ đen
+            label.TextSize = SETTINGS.TextSize
+            label.Font = Enum.Font.GothamBold
+            label.TextYAlignment = Enum.TextYAlignment.Bottom
             
             bgui.Parent = head
 
             -- Cập nhật khoảng cách liên tục
-            RunService.RenderStepped:Connect(function()
-                if not character or not character.Parent or not bgui.Parent then return end
-                
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
-                    -- Hiển thị: Tên [Số mét]
-                    label.Text = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
-                else
-                    label.Text = player.DisplayName
+            -- Dùng vòng lặp này nhẹ hơn RenderStepped cho điện thoại
+            task.spawn(function()
+                while character and character.Parent and bgui.Parent do
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+                        local targetPos = root.Position
+                        local dist = (myPos - targetPos).Magnitude
+                        
+                        label.Text = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
+                    else
+                        label.Text = player.DisplayName
+                    end
+                    task.wait(0.1) -- Cập nhật 0.1s/lần để đỡ lag máy
                 end
             end)
         end
     end
 
-    if player.Character then
-        applyVisuals(player.Character)
-    end
-
-    player.CharacterAdded:Connect(function(char)
-        applyVisuals(char)
-    end)
+    -- Kích hoạt khi có nhân vật mới
+    if player.Character then applyVisuals(player.Character) end
+    player.CharacterAdded:Connect(applyVisuals)
 end
 
--- Chạy cho tất cả người chơi
+-- Chạy cho người chơi hiện tại
 for _, p in pairs(Players:GetPlayers()) do
     createESP(p)
 end
 Players.PlayerAdded:Connect(createESP)
 
 -------------------------------------------------------------------
--- PHẦN 2: HACK THỂ LỰC (STAMINA) - ĐÃ SỬA LỖI
+-- PHẦN 2: HACK THỂ LỰC (STAMINA) 
 -------------------------------------------------------------------
--- Phần này hay gây lỗi nếu game không có đúng đường dẫn, tôi đã thêm pcall để nó không làm hỏng script ESP
+-- Sử dụng pcall để tránh Delta bị crash nếu sai game
 task.spawn(function()
-    pcall(function()
-        -- Code gốc của bạn 
-        local Sprinting = game:GetService("ReplicatedStorage"):WaitForChild("Systems", 2):WaitForChild("Character", 2):WaitForChild("Game", 2):WaitForChild("Sprinting", 2)
+    local success, err = pcall(function()
+        local Sprinting = game:GetService("ReplicatedStorage"):WaitForChild("Systems", 5):WaitForChild("Character", 5):WaitForChild("Game", 5):WaitForChild("Sprinting", 5)
         
         if Sprinting then
             local stamina = require(Sprinting)
+            -- Thiết lập thông số như yêu cầu 
             stamina.MaxStamina = 100 
             stamina.MinStamina = -20 
             stamina.StaminaGain = 100
-            stamina.StaminaLoss = 0 -- Chỉnh về 0 để chạy không mất sức
+            stamina.StaminaLoss = 0 -- Sửa thành 0 để chạy mãi không mệt
             stamina.SprintSpeed = 35 
             stamina.StaminaLossDisabled = true
-            print(">>> Hack Thể Lực: Thành công!")
-        else
-            warn(">>> Hack Thể Lực: Không tìm thấy file game, bỏ qua.")
+            print("Delta: Hack Thể Lực đã bật!")
         end
     end)
+    
+    if not success then
+        warn("Delta: Game này không có hệ thống Stamina đó, nhưng ESP vẫn chạy tốt!")
+    end
+end)
+
+print("--- Delta Script Loaded ---")
 end)
 
 print(">>> Script đã chạy xong!")
