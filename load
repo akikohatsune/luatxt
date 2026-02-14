@@ -1,1 +1,2 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/akikohatsune/luatxt/refs/heads/main/simplelua.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/akikohatsune/luatxt/refs/heads/main/undetec.lua", true))()
